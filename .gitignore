@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+*.apk
+token.json
+credentials.json
+.env

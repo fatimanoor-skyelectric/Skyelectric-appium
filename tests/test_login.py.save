@@ -1,0 +1,87 @@
+import pytest
+from pages.login_page import LoginPage
+from pages.home_page  import HomePage
+from utils.gmail_helper import get_otp_from_gmail
+
+# ⚠️ Replace with the email registered on SkyElectric app
+TEST_EMAIL = "fatimanoor@skyelectric.com
+"
+
+
+class TestLogin:
+
+    def restart_app(self, driver):
+        """Helper to restart app to login screen."""
+        driver.terminate_app(driver.current_package)
+        driver.activate_app(driver.current_package)
+
+    # ── Test 1 ────────────────────────────────────────────────────
+    def test_login_screen_loads(self, driver):
+        """App should open to login/email screen."""
+        login = LoginPage(driver)
+        login.wait_for_login_screen()
+        assert driver.find_element(*LoginPage.EMAIL_FIELD).is_displayed(), \
+            "Email field not visible"
+
+    # ── Test 2 ────────────────────────────────────────────────────
+    def test_successful_login_with_otp(self, driver):
+        """Valid email + OTP from Gmail should reach dashboard."""
+        login = LoginPage(driver)
+        home  = HomePage(driver)
+
+        login.login_with_otp(
+            email=TEST_EMAIL,
+            otp_fetcher_func=lambda: get_otp_from_gmail(
+                sender_filter='skyelectric',
+                subject_filter='OTP',
+                wait_seconds=60   # wait up to 60s for email
+            )
+        )
+
+        assert home.is_dashboard_loaded(), "Dashboard did not load after OTP login"
+
+    # ── Test 3 ────────────────────────────────────────────────────
+    def test_invalid_email_format(self, driver):
+        """Non-email string should show validation error."""
+        self.restart_app(driver)
+        login = LoginPage(driver)
+        login.wait_for_login_screen()
+        login.enter_email("notanemail")
+        login.tap_send_otp()
+        assert login.is_error_displayed(), "No error for invalid email format"
+
+    # ── Test 4 ────────────────────────────────────────────────────
+    def test_empty_email_field(self, driver):
+        """Empty email should show validation error."""
+        self.restart_app(driver)
+        login = LoginPage(driver)
+        login.wait_for_login_screen()
+        login.tap_send_otp()   # tap without entering email
+        assert login.is_error_displayed(), "No error for empty email"
+
+    # ── Test 5 ────────────────────────────────────────────────────
+    def test_wrong_otp(self, driver):
+        """Entering wrong OTP should show error on OTP screen."""
+        self.restart_app(driver)
+        login = LoginPage(driver)
+        login.wait_for_login_screen()
+        login.enter_email(TEST_EMAIL)
+        login.tap_send_otp()
+        login.wait_for_otp_screen()
+        login.enter_otp("000000")   # wrong OTP
+        login.tap_verify()
+        assert login.is_error_displayed(), f"No error for wrong OTP. Error text: {login.get_error_text()}"
+
+    # ── Test 6 ────────────────────────────────────────────────────
+    def test_resend_otp(self, driver):
+        """Resend OTP button should be available on OTP screen."""
+        self.restart_app(driver)
+        login = LoginPage(driver)
+        login.wait_for_login_screen()
+        login.enter_email(TEST_EMAIL)
+        login.tap_send_otp()
+        login.wait_for_otp_screen()
+        login.tap_resend_otp()
+        # Should still be on OTP screen (not crash)
+        login.wait_for_otp_screen()
+        assert True, "Resend OTP worked"
